@@ -17,3 +17,5 @@ models/
 
 # OS
 .DS_Store
+# Embedding experiment artifacts
+models_embed/
