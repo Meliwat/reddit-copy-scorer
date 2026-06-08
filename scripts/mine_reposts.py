@@ -116,6 +116,7 @@ def pull(sub, per_sub, before, sleep):
             except (TypeError, ValueError):
                 continue
             rows.append({"sub": sub, "nurl": nu, "title": title, "score": score,
+                         "upvote_ratio": r.get("upvote_ratio"), "num_comments": r.get("num_comments"),
                          "id": cid, "created_utc": r.get("created_utc")})
             new += 1
             if len(rows) >= per_sub:
