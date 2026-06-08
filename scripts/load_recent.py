@@ -41,6 +41,12 @@ DEFAULT_SUBREDDITS = [
     "mildlyinteresting", "Damnthatsinteresting", "interestingasfuck",
     "dataisbeautiful", "science", "technology", "Futurology", "programming",
     "Entrepreneur", "smallbusiness", "marketing", "funny", "gaming",
+    # Maker / indie-SaaS marketing subs (added 2026-06; all show real held-out
+    # title signal, weakest is SideProject rho~0.13 which the confidence flag
+    # surfaces as low). Useful for scoring SaaS/app launch copy.
+    "iosappsmarketing", "SideProject", "iOSProgramming", "apphookup",
+    "indiehackers", "SaaS", "microsaas", "EntrepreneurRideAlong",
+    "somethingimade", "growmybusiness", "GrowthHacking",
 ]
 
 
