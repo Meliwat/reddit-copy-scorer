@@ -19,3 +19,7 @@ __pycache__/
 .DS_Store
 # Embedding experiment artifacts
 /models_embed/
+
+# Cross-encoder artifacts (large)
+models_ce/
+data/upworthy_*.csv
