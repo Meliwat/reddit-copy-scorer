@@ -125,7 +125,13 @@ def main() -> None:
         prec, k = top_decile_precision(pred, lab_te)
 
         joblib.dump({"vectorizer": vec, "scaler": scaler, "model": model,
-                     "cdfs": cdfs}, args.models_dir / f"{sub}.joblib")
+                     "cdfs": cdfs,
+                     "metrics": {"rho": float(rho_model),
+                                 "rho_naive": float(rho_naive),
+                                 "top10": float(prec),
+                                 "n_train": int(len(i_tr)),
+                                 "n_test": int(len(i_te))}},
+                    args.models_dir / f"{sub}.joblib")
 
         results.append({"subreddit": sub, "n_train": len(i_tr), "n_test": len(i_te),
                         "rho_naive": rho_naive, "rho_model": rho_model,

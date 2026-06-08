@@ -29,6 +29,24 @@ def _band_label(band: float) -> str:
     return "weak"
 
 
+def _fmt_terms(terms: list) -> str:
+    return ", ".join(label for label, _ in terms) if terms else "(nothing notable)"
+
+
+def _print_explanation(scorer: SubredditScorer, title: str) -> None:
+    ex = scorer.explain(title)
+    print(f"    boosted by: {_fmt_terms(ex['boosts'])}")
+    print(f"    hurt by:    {_fmt_terms(ex['hurts'])}")
+
+
+def _print_confidence(scorer: SubredditScorer) -> None:
+    c = scorer.confidence()
+    if c["level"] == "low":
+        print(f"\n!! Low-confidence subreddit: {c['note']}")
+    elif c["level"] == "moderate":
+        print(f"\n~ Moderate confidence: {c['note']}")
+
+
 def cmd_subs(args: argparse.Namespace) -> int:
     subs = available_subreddits(args.models_dir)
     if not subs:
@@ -45,6 +63,8 @@ def cmd_score(args: argparse.Namespace) -> int:
     band = float(scorer.score([args.title])[0])
     print(f"r/{args.subreddit}  score {band:5.1f}/100  ({_band_label(band)})")
     print(f"  {args.title}")
+    _print_explanation(scorer, args.title)
+    _print_confidence(scorer)
     print(f"\n{DISCLAIMER}")
     return 0
 
@@ -60,6 +80,8 @@ def cmd_rank(args: argparse.Namespace) -> int:
     for rank, (title, band) in enumerate(ranked, 1):
         marker = "->" if rank == 1 else "  "
         print(f"{marker} #{rank}  {band:5.1f}/100  ({_band_label(band)})  {title}")
+        _print_explanation(scorer, title)
+    _print_confidence(scorer)
     print(f"\n{DISCLAIMER}")
     return 0
 
