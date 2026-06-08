@@ -1,13 +1,12 @@
 # Launch kit
 
-Drafts to copy-paste. Replace `SPACE_URL` with the live Hugging Face Space link
-once deployed, and `REPO_URL` with https://github.com/Meliwat/reddit-copy-scorer
-after the repo is public.
+Live demo: https://huggingface.co/spaces/Meliwat93/reddit-copy-scorer
+Repo: https://github.com/Meliwat/reddit-copy-scorer (make public before posting)
 
-## Pre-launch checklist (do in order)
-- [ ] Deploy the Space (space/ folder) -> get SPACE_URL, confirm it loads.
+## Pre-launch checklist
+- [x] Deploy the Space (space/ folder), confirm it loads and ranks in-prod.
+- [x] Add the Space URL to README.md and the demo callout.
 - [ ] Make the GitHub repo public.
-- [ ] Add SPACE_URL to README.md (the "Live demo" line) and to space/README.md.
 - [ ] Record a 10-15s GIF of ranking drafts; put it near the top of README.
 - [ ] Post Show HN in the morning (Tue-Thu, ~8-10am ET). Then reply to comments.
 - [ ] Cross-post to r/SideProject and r/MachineLearning (weekend self-promo thread).
@@ -26,8 +25,8 @@ relative performance in that specific community. It is trained on real Reddit
 engagement (Pushshift submissions, 2012-2018), not an LLM's opinion of what
 looks good.
 
-Demo (try it in 10s): SPACE_URL
-Code + how it works: REPO_URL
+Demo (try it in 10s): https://huggingface.co/spaces/Meliwat93/reddit-copy-scorer
+Code + how it works: https://github.com/Meliwat/reddit-copy-scorer
 
 How it works: for each subreddit it learns title -> within-(subreddit, year)
 percentile of score. v1 is deliberately simple: TF-IDF over the title + a few
@@ -57,21 +56,20 @@ built reddit-copy-scorer: pick a subreddit, paste 2-3 draft titles, and it tells
 you which one is likely to land best in *that* community.
 
 It is trained on real Reddit engagement data (not an AI guessing), one model per
-subreddit. Try it here: SPACE_URL
+subreddit. Try it here: https://huggingface.co/spaces/Meliwat93/reddit-copy-scorer
 
 I am being upfront that it is not magic: it predicts relative title strength
 within a subreddit, it only reads the title, and it works best on text-driven
 subs like r/todayilearned and r/AskReddit. Full honest write-up of what worked
-and what did not is in the repo: REPO_URL
+and what did not is in the repo: https://github.com/Meliwat/reddit-copy-scorer
 
 It is free and open source (MIT). Would love feedback on what would make it
 actually useful to you.
 
 ## Notes for replies
-- If asked about data recency: trained on 2012-2018 Pushshift; the pipeline can
-  be pointed at newer dumps, that is the obvious next step.
-- If asked "why so low ~0.24": title-only signal on heavy-tailed, heavily-tied
-  vote data; the product is RANKING drafts, where even modest rank correlation
-  is useful, not predicting absolute upvotes.
-- If asked about more subreddits: the loader takes any subreddit list; only
-  trained 6 for v1.
+- Data recency: trained on 2012-2018 Pushshift; the pipeline can be pointed at
+  newer dumps, that is the obvious next step.
+- "Why so low ~0.24": title-only signal on heavy-tailed, heavily-tied vote data;
+  the product is RANKING drafts, where even modest rank correlation is useful,
+  not predicting absolute upvotes.
+- More subreddits: the loader takes any subreddit list; only trained 6 for v1.

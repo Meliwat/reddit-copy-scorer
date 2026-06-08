@@ -4,7 +4,7 @@
 scores a title for a *specific subreddit* and ranks your draft variants so you
 post the strongest one. Trained on real Reddit engagement, not an LLM's opinion.
 
-> **Live demo:** _(Hugging Face Space link added on launch)_
+> **Live demo: https://huggingface.co/spaces/Meliwat93/reddit-copy-scorer**
 > Status: building in public.
 
 ## Why this exists

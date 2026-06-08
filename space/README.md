@@ -1,7 +1,7 @@
 ---
 title: reddit-copy-scorer
 emoji: 📊
-colorFrom: orange
+colorFrom: yellow
 colorTo: indigo
 sdk: gradio
 sdk_version: 6.17.3
