@@ -1,7 +1,7 @@
 [project]
 name = "reddit-copy-scorer"
 version = "0.1.0"
-description = "Add your description here"
+description = "Predict how a Reddit post performs, per subreddit, to rank draft titles before posting."
 readme = "README.md"
 requires-python = ">=3.12.3"
 dependencies = [
@@ -14,3 +14,13 @@ dependencies = [
     "torch==2.6.0",
     "transformers>=5.10.2",
 ]
+
+[project.scripts]
+reddit-copy-scorer = "reddit_copy_scorer.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/reddit_copy_scorer"]
