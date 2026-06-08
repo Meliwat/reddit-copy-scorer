@@ -1,20 +1,21 @@
 """Train and evaluate the per-subreddit baseline copy scorer.
 
 For each subreddit independently:
-  - Label = percentile of the post's `score` within the subreddit's TRAIN split
-    (empirical CDF fit on train only, applied to test -> no leakage). This makes
-    "relative performance within this community" the literal target.
-  - Features = TF-IDF(title) + standardized structural features (see
-    reddit_copy_scorer.features).
-  - Model = RidgeCV (linear, sparse-friendly, tiny alpha search via LOO).
+  - Label = ERA-AWARE percentile of the post's `score`: the empirical CDF is fit
+    per (subreddit, year) on the TRAIN split only, then applied to test. This
+    makes "relative performance within this community" the target while removing
+    the cross-year vote-inflation confound (a 2012 score and a 2018 score are
+    not comparable raw, but their within-year percentiles are).
+  - Features = TF-IDF(title) + standardized structural features.
+  - Model = RidgeCV (linear, sparse-friendly, small alpha search).
 
-We evaluate on a held-out split with RANK metrics, because the product is
-ranking drafts, not predicting an upvote count:
-  - Spearman rank correlation between predicted score and true upvote score.
-  - Top-decile precision: of the posts we rank in the top 10%, how many were
-    actually in the true top 10%.
-Both are compared against honest baselines (title word-count for Spearman; the
-0.10 random rate for top-decile precision).
+Evaluation is on a held-out split with RANK metrics (the product is ranking
+drafts, not predicting an upvote count), measured against the era-normalized
+label so eras are not confounded:
+  - Spearman rank correlation (pred vs era-aware label).
+  - Top-decile precision (our top 10% vs the true top 10%).
+Compared with honest baselines: title word-count (Spearman) and 0.10 (random
+top-decile).
 
 Run (on the GPU box, venv active):
     python scripts/train_baseline.py
@@ -38,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from reddit_copy_scorer.features import build_vectorizer, structural_features  # noqa: E402
 
 SEED = 0
+PREV_SESSION_MEAN_RHO = 0.238  # single-era (Jan-2012) baseline, for comparison
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,10 +50,22 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def percentile_labels(train_scores: np.ndarray, scores: np.ndarray) -> np.ndarray:
-    """Empirical-CDF percentile of `scores` against the sorted train scores."""
-    srt = np.sort(train_scores)
-    return np.searchsorted(srt, scores, side="right") / len(srt)
+def fit_group_cdfs(scores: np.ndarray, years: np.ndarray) -> dict:
+    """sorted train scores per year, plus a global fallback under key None."""
+    cdfs = {None: np.sort(scores)}
+    for y in np.unique(years):
+        cdfs[int(y)] = np.sort(scores[years == y])
+    return cdfs
+
+
+def apply_cdfs(cdfs: dict, scores: np.ndarray, years: np.ndarray) -> np.ndarray:
+    out = np.empty(len(scores), dtype=np.float64)
+    for i, (s, y) in enumerate(zip(scores, years)):
+        srt = cdfs.get(int(y))
+        if srt is None or len(srt) == 0:
+            srt = cdfs[None]
+        out[i] = np.searchsorted(srt, s, side="right") / len(srt)
+    return out
 
 
 def top_decile_precision(pred: np.ndarray, truth: np.ndarray) -> tuple[float, int]:
@@ -67,23 +81,35 @@ def main() -> None:
     args.models_dir.mkdir(parents=True, exist_ok=True)
 
     subs = sorted(df["subreddit"].unique())
-    print(f"Loaded {len(df):,} rows across {len(subs)} subreddits from {args.data}\n")
+    yspan = f"{int(df.year.min())}-{int(df.year.max())}"
+    print(f"Loaded {len(df):,} rows across {len(subs)} subreddits, years {yspan}, "
+          f"from {args.data}\n")
 
     results = []
     for sub in subs:
-        d = df[df["subreddit"] == sub]
+        d = df[df["subreddit"] == sub].reset_index(drop=True)
         titles = d["title"].tolist()
         scores = d["score"].to_numpy(dtype=np.float64)
+        years = d["year"].to_numpy()
 
-        t_tr, t_te, s_tr, s_te = train_test_split(
-            titles, scores, test_size=args.test_size, random_state=SEED)
+        idx = np.arange(len(d))
+        # stratify by year so every era appears in both splits
+        strat = years if d["year"].value_counts().min() >= 2 else None
+        i_tr, i_te = train_test_split(idx, test_size=args.test_size,
+                                      random_state=SEED, stratify=strat)
 
-        y_tr = percentile_labels(s_tr, s_tr)  # train labels from train CDF
+        t_tr = [titles[i] for i in i_tr]
+        t_te = [titles[i] for i in i_te]
+        s_tr, s_te = scores[i_tr], scores[i_te]
+        y_tr, y_te = years[i_tr], years[i_te]
+
+        cdfs = fit_group_cdfs(s_tr, y_tr)
+        lab_tr = apply_cdfs(cdfs, s_tr, y_tr)
+        lab_te = apply_cdfs(cdfs, s_te, y_te)  # era-aware test target
 
         vec = build_vectorizer()
         Xtr_t = vec.fit_transform(t_tr)
         Xte_t = vec.transform(t_te)
-
         S_tr = structural_features(t_tr)
         S_te = structural_features(t_te)
         scaler = StandardScaler().fit(S_tr)
@@ -91,47 +117,39 @@ def main() -> None:
         Xte = hstack([Xte_t, csr_matrix(scaler.transform(S_te))]).tocsr()
 
         model = RidgeCV(alphas=(0.1, 1.0, 10.0, 100.0))
-        model.fit(Xtr, y_tr)
+        model.fit(Xtr, lab_tr)
         pred = model.predict(Xte)
 
-        # Spearman vs true upvote score (rank-invariant to the percentile map).
-        rho_model = spearmanr(pred, s_te).correlation
-        # Honest naive baseline: predict by title word count.
-        rho_naive = spearmanr(S_te[:, 0], s_te).correlation
-        prec, k = top_decile_precision(pred, s_te)
+        rho_model = spearmanr(pred, lab_te).correlation
+        rho_naive = spearmanr(S_te[:, 0], lab_te).correlation  # word-count baseline
+        prec, k = top_decile_precision(pred, lab_te)
 
         joblib.dump({"vectorizer": vec, "scaler": scaler, "model": model,
-                     "train_scores": np.sort(s_tr)},
-                    args.models_dir / f"{sub}.joblib")
+                     "cdfs": cdfs}, args.models_dir / f"{sub}.joblib")
 
-        results.append({
-            "subreddit": sub,
-            "n_train": len(t_tr),
-            "n_test": len(t_te),
-            "rho_naive": rho_naive,
-            "rho_model": rho_model,
-            "top10%_model": prec,
-            "top10%_random": k / len(s_te),
-            "alpha": float(model.alpha_),
-        })
+        results.append({"subreddit": sub, "n_train": len(i_tr), "n_test": len(i_te),
+                        "rho_naive": rho_naive, "rho_model": rho_model,
+                        "top10%_model": prec, "top10%_random": k / len(i_te),
+                        "alpha": float(model.alpha_)})
 
     res = pd.DataFrame(results)
-    mean_row = {
-        "subreddit": "MEAN", "n_train": res.n_train.mean(), "n_test": res.n_test.mean(),
-        "rho_naive": res.rho_naive.mean(), "rho_model": res.rho_model.mean(),
-        "top10%_model": res["top10%_model"].mean(),
-        "top10%_random": res["top10%_random"].mean(), "alpha": np.nan,
-    }
-    res = pd.concat([res, pd.DataFrame([mean_row])], ignore_index=True)
+    res.loc[len(res)] = {"subreddit": "MEAN", "n_train": res.n_train.mean(),
+                         "n_test": res.n_test.mean(), "rho_naive": res.rho_naive.mean(),
+                         "rho_model": res.rho_model.mean(),
+                         "top10%_model": res["top10%_model"].mean(),
+                         "top10%_random": res["top10%_random"].mean(), "alpha": np.nan}
 
-    print("=== Per-subreddit baseline eval (held-out 20%) ===")
+    print("=== Per-subreddit baseline eval (held-out 20%, era-aware target) ===")
     with pd.option_context("display.float_format", lambda v: f"{v:.3f}",
                            "display.width", 160):
         print(res.to_string(index=False))
-    print(f"\nModels saved to {args.models_dir}/  (one .joblib per subreddit)")
-    print("Read: rho_model should beat rho_naive; top10%_model should beat "
-          "top10%_random (~0.10). Spearman on this heavy-tied data is modest by "
-          "nature; we report it honestly.")
+    new_mean = res.loc[res.subreddit == "MEAN", "rho_model"].iloc[0]
+    print(f"\nMean Spearman: {new_mean:.3f}  (prev single-era Jan-2012 baseline: "
+          f"{PREV_SESSION_MEAN_RHO:.3f})")
+    print(f"Models saved to {args.models_dir}/  (one .joblib per subreddit)")
+    print("Read: rho_model beats rho_naive and top10%_model beats ~0.10 random => "
+          "real title signal. Modest absolute rho is honest for title-only on "
+          "heavy-tied data.")
 
 
 if __name__ == "__main__":
