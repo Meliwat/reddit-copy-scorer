@@ -5,8 +5,8 @@ __pycache__/
 .ipynb_checkpoints/
 
 # Data and model artifacts (large; not committed)
-data/
-models/
+/data/
+/models/
 *.ckpt
 *.safetensors
 *.bin
@@ -18,4 +18,4 @@ models/
 # OS
 .DS_Store
 # Embedding experiment artifacts
-models_embed/
+/models_embed/
